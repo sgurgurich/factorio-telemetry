@@ -353,18 +353,41 @@ local function read_probes()
     if e and e.valid then
       local pr = { surface = e.surface.name }
 
-      local ok, st = pcall(function()
-        return e.electric_network_statistics
-      end)
-      if ok and st then
-        local i, o = 0.0, 0.0
-        for _, v in pairs(st.input_counts) do
-          i = i + v
+      -- A speaker has no electric_network_statistics (that is pole-only), but
+      -- it does have electric_network_id for the network powering it. Read the
+      -- network's flow from a cached electric pole on that same network; the
+      -- pole is found by a tiny localized search and only re-resolved when the
+      -- cached one is gone or its network changed.
+      local nid = e.electric_network_id
+      if nid then
+        local pole = p.pole
+        if not (pole and pole.valid and pole.electric_network_id == nid) then
+          pole = nil
+          for _, c in pairs(e.surface.find_entities_filtered({
+            type = "electric-pole", position = e.position, radius = 16,
+          })) do
+            if c.valid and c.electric_network_id == nid then
+              pole = c
+              break
+            end
+          end
+          p.pole = pole
         end
-        for _, v in pairs(st.output_counts) do
-          o = o + v
+        if pole then
+          local ok, st = pcall(function()
+            return pole.electric_network_statistics
+          end)
+          if ok and st then
+            local i, o = 0.0, 0.0
+            for _, v in pairs(st.input_counts) do
+              i = i + v
+            end
+            for _, v in pairs(st.output_counts) do
+              o = o + v
+            end
+            pr.electric = { produced_j = i, consumed_j = o }
+          end
         end
-        pr.electric = { produced_j = i, consumed_j = o }
       end
 
       local sig = {}

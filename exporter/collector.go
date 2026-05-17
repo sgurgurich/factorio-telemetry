@@ -152,6 +152,7 @@ func NewCollector(r *RCON, cacheTTL time.Duration) *Collector {
 			"robot_ct":           d("factorio_construction_robots_total", "Total construction robots", "surface"),
 			"alerts":             d("factorio_active_alerts", "Active in-game alerts (max across players)", "surface", "type"),
 			"events":             d("factorio_events_total", "Cumulative game events by kind", "kind"),
+			"probe_info":         d("factorio_probe_info", "1 for each registered telemetry probe speaker", "probe", "surface"),
 			"probe_e_produced":   d("factorio_probe_electric_produced_joules_total", "Cumulative energy produced on a probe speaker's electric network", "probe", "surface"),
 			"probe_e_consumed":   d("factorio_probe_electric_consumed_joules_total", "Cumulative energy consumed on a probe speaker's electric network", "probe", "surface"),
 			"probe_signal":       d("factorio_probe_signal", "Circuit-network signal wired into a probe speaker", "probe", "surface", "signal"),
@@ -267,6 +268,7 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for label, pr := range s.Probes {
+		g("probe_info", 1, label, pr.Surface)
 		if pr.Electric != nil {
 			ct("probe_e_produced", pr.Electric.ProducedJ, label, pr.Surface)
 			ct("probe_e_consumed", pr.Electric.ConsumedJ, label, pr.Surface)

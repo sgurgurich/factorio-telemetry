@@ -51,7 +51,7 @@
         "label": "Probe",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "query": "label_values(factorio_probe_electric_produced_joules_total, probe)",
+        "query": "label_values(factorio_probe_info, probe)",
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
@@ -96,9 +96,44 @@
     },
     {
       "type": "timeseries",
+      "title": "Probe — Network Power (W) — $probe",
+      "description": "Power flow on the electric network each tagged Programmable Speaker is powered from. Pick a probe in the 'Probe' dropdown.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "watt", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "targets": [
+        { "expr": "sum by (probe) (rate(factorio_probe_electric_produced_joules_total{probe=~\"$probe\"}[2m]))", "legendFormat": "{{probe}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "sum by (probe) (rate(factorio_probe_electric_consumed_joules_total{probe=~\"$probe\"}[2m]))", "legendFormat": "{{probe}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Probe — Accumulator Charge (%) — $probe",
+      "description": "Accumulator charge from a probe. Wire an accumulator into a tagged speaker — the accumulator outputs its charge 0–100 on its circuit signal. Best used on a speaker dedicated to accumulator(s); each wired accumulator's signal shows here.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 15 }, "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 20 }, { "color": "green", "value": 50 } ] } } },
+      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\"}", "legendFormat": "{{probe}} / {{signal}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+    },
+    {
+      "type": "table",
+      "title": "Probe — Wired Signals — $probe",
+      "description": "Current value of every circuit signal wired into the selected probe speaker (e.g. a roboport set to 'read logistics' lists each item in the network and its count). Click the filter icon on the Item column to search.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "fieldConfig": { "defaults": { "custom": { "filterable": true, "align": "auto" } }, "overrides": [] },
+      "options": { "showHeader": true, "sortBy": [ { "displayName": "Count", "desc": true } ], "footer": { "show": false } },
+      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\"}", "instant": true, "format": "table", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "container": true, "endpoint": true, "instance": true, "job": true, "namespace": true, "pod": true, "service": true, "probe": true, "surface": true }, "renameByName": { "signal": "Item", "Value": "Count" } } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "Count", "desc": true } ] } }
+      ]
+    },
+    {
+      "type": "timeseries",
       "title": "Item Production Rate — $item (${rate_unit:text})",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"$item\"}[5m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -106,7 +141,7 @@
       "type": "timeseries",
       "title": "Item Consumption Rate — $item (${rate_unit:text})",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\"$item\"}[5m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -115,7 +150,7 @@
       "title": "Net Item Production — surplus / deficit (${rate_unit:text})",
       "description": "produced − consumed per item. Positive = building a surplus (stockpiling); negative = net drain/deficit. Shows the 10 biggest surpluses and 10 biggest deficits. Excludes the aggregate 'science' pseudo-item.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 12 },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "axisCenteredZero": true, "gradientMode": "scheme" }, "color": { "mode": "continuous-RdYlGr" } } },
       "targets": [
         { "expr": "topk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) * 0)))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
@@ -127,15 +162,16 @@
       "title": "Science Consumed by Pack — research (${rate_unit:text})",
       "description": "Science packs consumed by labs (research progress), per pack type.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
       "targets": [ { "expr": "${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\".*science-pack\"}[5m]))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
-      "title": "Power: Produced vs Consumed (W)",
+      "title": "Power: Produced vs Consumed by Surface (W)",
+      "description": "Whole-surface electric totals (all networks on each surface) from the background scan. For a specific network use a Probe instead.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
       "fieldConfig": { "defaults": { "unit": "watt", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [
         { "expr": "sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[5m]))", "legendFormat": "{{surface}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
@@ -144,25 +180,17 @@
     },
     {
       "type": "timeseries",
-      "title": "Power Satisfaction (consumed / produced)",
+      "title": "Power Satisfaction by Surface (consumed / produced)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 37 },
       "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
       "targets": [ { "expr": "clamp_max(sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[5m])) / sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[5m])), 1)", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
-      "title": "Accumulator Charge (%)",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
-      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
-      "targets": [ { "expr": "sum by (surface) (factorio_accumulator_charge_joules{surface=~\"$surface\"}) / clamp_min(sum by (surface) (factorio_accumulator_capacity_joules{surface=~\"$surface\"}), 1)", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
-    },
-    {
-      "type": "timeseries",
       "title": "Pollution by Surface",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
       "fieldConfig": { "defaults": { "unit": "short" } },
       "targets": [ { "expr": "max by (surface) (factorio_surface_pollution{surface=~\"$surface\"})", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -170,7 +198,7 @@
       "type": "timeseries",
       "title": "Evolution by Surface",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
       "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
       "targets": [ { "expr": "max by (surface) (factorio_evolution_factor{surface=~\"$surface\"})", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -178,7 +206,7 @@
       "type": "timeseries",
       "title": "Fluid Production Rate (top 10, ${rate_unit:text})",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 53 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [ { "expr": "topk(10, ${rate_unit} * sum by (fluid) (rate(factorio_fluid_produced_total{surface=~\"$surface\"}[5m])))", "legendFormat": "{{fluid}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -186,7 +214,7 @@
       "type": "timeseries",
       "title": "Fluid Consumption Rate (top 10, ${rate_unit:text})",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 53 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [ { "expr": "topk(10, ${rate_unit} * sum by (fluid) (rate(factorio_fluid_consumed_total{surface=~\"$surface\"}[5m])))", "legendFormat": "{{fluid}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -194,7 +222,7 @@
       "type": "timeseries",
       "title": "Robots (available / total)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 53 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 61 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [
         { "expr": "sum by (surface) (factorio_logistic_robots_available{surface=~\"$surface\"})", "legendFormat": "{{surface}} logistic avail", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
@@ -207,7 +235,7 @@
       "type": "timeseries",
       "title": "Logistic Network Stock — $item",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 53 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 61 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [ { "expr": "topk(15, sum by (item) (factorio_logistic_item_count{surface=~\"$surface\", item=~\"$item\"}))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
@@ -215,30 +243,9 @@
       "type": "timeseries",
       "title": "Active Alerts by Type",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 61 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 69 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 40 } } },
       "targets": [ { "expr": "sum by (type) (factorio_active_alerts{surface=~\"$surface\"})", "legendFormat": "{{type}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Probe — Network Power (W) — $probe",
-      "description": "Power flow on the electric network each tagged Programmable Speaker is wired to (speaker has 'Connect to Telemetry' checked).",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 69 },
-      "fieldConfig": { "defaults": { "unit": "watt", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [
-        { "expr": "sum by (probe) (rate(factorio_probe_electric_produced_joules_total{probe=~\"$probe\", surface=~\"$surface\"}[5m]))", "legendFormat": "{{probe}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
-        { "expr": "sum by (probe) (rate(factorio_probe_electric_consumed_joules_total{probe=~\"$probe\", surface=~\"$surface\"}[5m]))", "legendFormat": "{{probe}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Probe — Wired Signals — $probe",
-      "description": "Circuit-network signals wired into a tagged speaker (e.g. a roboport set to read logistics/robot stats, an accumulator's charge, or any constant/arithmetic output).",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 69 },
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\", surface=~\"$surface\"}", "legendFormat": "{{probe}} / {{signal}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "logs",
