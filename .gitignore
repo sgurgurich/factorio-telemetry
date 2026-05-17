@@ -1,0 +1,8 @@
+# Build artifacts
+dist/
+
+# Local Claude Code agent config (machine-local; contains command history)
+.claude/
+
+# macOS
+.DS_Store

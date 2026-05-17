@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: factorio-telemetry-exporter
+  namespace: factorio
+  labels:
+    app: factorio-telemetry-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: factorio-telemetry-exporter
+  template:
+    metadata:
+      labels:
+        app: factorio-telemetry-exporter
+    spec:
+      containers:
+        - name: exporter
+          image: factorio-telemetry-exporter:0.3.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: RCON_ADDR
+              value: "factorio-default-rcon:27015"
+            - name: LISTEN_ADDR
+              value: ":9145"
+            - name: CACHE_TTL
+              value: "3s"
+            - name: LOKI_URL
+              value: "http://loki.monitoring.svc.cluster.local:3100"
+            - name: RCON_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: factorio-default-config
+                  key: rconpw
+          ports:
+            - name: metrics
+              containerPort: 9145
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: factorio-telemetry-exporter
+  namespace: factorio
+  labels:
+    app: factorio-telemetry-exporter
+spec:
+  selector:
+    app: factorio-telemetry-exporter
+  ports:
+    - name: metrics
+      port: 9145
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: factorio-telemetry-exporter
+  namespace: factorio
+  labels:
+    # Picked up by the kube-prometheus-stack Prometheus
+    # (serviceMonitorSelector matchLabels release=monitoring, all namespaces).
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: factorio-telemetry-exporter
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      # The exporter is a singleton. Drop the per-pod labels so a rollout /
+      # server restart (new pod name + IP) doesn't fork every metric into a
+      # new series and duplicate every dashboard tracker.
+      metricRelabelings:
+        - action: labeldrop
+          regex: (pod|instance)
