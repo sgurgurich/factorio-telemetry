@@ -61,6 +61,10 @@ local function logistics_enabled()
   return settings.global["factorio-telemetry-logistics"].value
 end
 
+local function quality_split_enabled()
+  return settings.global["factorio-telemetry-quality-split"].value
+end
+
 local function get_allowlist()
   local raw = settings.global["factorio-telemetry-item-allowlist"].value
   if not raw or raw == "" then
@@ -81,6 +85,90 @@ local function filtered_counts(counts, allow)
   for name, value in pairs(counts) do
     if value ~= 0 and (allow == nil or allow[name]) then
       out[name] = value
+    end
+  end
+  return out
+end
+
+-- Wrap a flat name->count table as the uniform nested {name={quality=count}}
+-- schema (all under "normal"), so the exporter/dashboard never branch on
+-- whether the quality split is active.
+local function wrap_normal(counts)
+  local out = {}
+  for name, value in pairs(counts) do
+    out[name] = { normal = value }
+  end
+  return out
+end
+
+-- Non-hidden quality prototype names, memoized (prototypes are static at
+-- runtime). Falls back to {"normal"} on a base game without the quality
+-- system so the rest of the pipeline is unconditional.
+local _qnames
+local function quality_names()
+  if _qnames then
+    return _qnames
+  end
+  local q = {}
+  pcall(function()
+    for name, proto in pairs(prototypes.quality) do
+      if not proto.hidden then
+        q[#q + 1] = name
+      end
+    end
+  end)
+  if #q == 0 then
+    q = { "normal" }
+  end
+  _qnames = q
+  return q
+end
+
+local _quality_warned = false
+-- Build {item={quality=count}} from the aggregate (all-quality) cumulative
+-- counter table. Factorio's lifetime counter (input_counts) is NOT keyed by
+-- quality, so the per-quality cumulative is fetched via get_input_count /
+-- get_output_count. The exact quality-arg shape is resolved at runtime: we
+-- only publish the split when it RECONCILES with the trusted aggregate
+-- counter; otherwise we fall back to {normal=total} (numbers identical to
+-- the non-split path) so a wrong API assumption can never publish bad data.
+local function split_by_quality(stats, counts, category, qnames)
+  local out = {}
+  for name, total in pairs(counts) do
+    local per, sum, okall = {}, 0, true
+    for i = 1, #qnames do
+      local q = qnames[i]
+      local ok, v = pcall(function()
+        local f = (category == "input") and stats.get_input_count
+          or stats.get_output_count
+        local r = f(name, q) -- positional (name, quality)
+        if type(r) ~= "number" then
+          r = f({ name = name, quality = q }) -- table-arg fallback
+        end
+        return r
+      end)
+      if ok and type(v) == "number" then
+        if v ~= 0 then
+          per[q] = v
+        end
+        sum = sum + v
+      else
+        okall = false
+        break
+      end
+    end
+    if okall and math.abs(sum - total) <= math.max(1, math.abs(total) * 0.005) then
+      out[name] = per
+    else
+      out[name] = { normal = total }
+      if not _quality_warned then
+        _quality_warned = true
+        log(
+          "[factorio-telemetry] quality-split: per-quality counter did not "
+            .. "reconcile with the aggregate; reporting as normal. Verify the "
+            .. "LuaFlowStatistics quality API in-game."
+        )
+      end
     end
   end
   return out
@@ -168,6 +256,37 @@ local function slow_next_surface(b)
   end
 end
 
+-- Instantaneous network power (W) straight from Factorio's own smoothed flow
+-- stats — the same data the in-game electric-network graph shows. Avoids the
+-- aliasing from rate()-ing a coarsely/irregularly-sampled cumulative joules
+-- counter. get_flow_count is per-tick for electric networks, so *60 -> W.
+local FLOW_PRECISION = defines.flow_precision_index.one_minute
+
+local function flow_power(stats)
+  local pin, pout = 0.0, 0.0
+  for name in pairs(stats.input_counts) do
+    local ok, v = pcall(function()
+      return stats.get_flow_count({
+        name = name, category = "input", precision_index = FLOW_PRECISION,
+      })
+    end)
+    if ok and v then
+      pin = pin + v
+    end
+  end
+  for name in pairs(stats.output_counts) do
+    local ok, v = pcall(function()
+      return stats.get_flow_count({
+        name = name, category = "output", precision_index = FLOW_PRECISION,
+      })
+    end)
+    if ok and v then
+      pout = pout + v
+    end
+  end
+  return pin * 60.0, pout * 60.0
+end
+
 local function do_scan_init(b)
   local sname = b.surfaces[b.si]
   local surface = game.get_surface(sname)
@@ -190,7 +309,7 @@ local function do_scan_init(b)
   b.scan = {
     minx = minx, maxx = maxx, miny = miny, maxy = maxy,
     cx = minx, cy = miny,
-    e_in = 0.0, e_out = 0.0, nets = 0,
+    e_in = 0.0, e_out = 0.0, e_pw = 0.0, e_cw = 0.0, nets = 0,
     acc_c = 0.0, acc_cap = 0.0,
     seen_net = {}, seen_acc = {},
     done = (minx == nil),
@@ -207,6 +326,8 @@ local function do_scan(b)
     b.result[sname].electric = {
       produced_j = sc.e_in,
       consumed_j = sc.e_out,
+      produced_w = sc.e_pw,
+      consumed_w = sc.e_cw,
       networks = sc.nets,
       accumulator_charge_j = sc.acc_c,
       accumulator_capacity_j = sc.acc_cap,
@@ -237,6 +358,9 @@ local function do_scan(b)
               for _, v in pairs(st.output_counts) do
                 sc.e_out = sc.e_out + v
               end
+              local pw, cw = flow_power(st)
+              sc.e_pw = sc.e_pw + pw
+              sc.e_cw = sc.e_cw + cw
             end
           else -- accumulator
             local un = e.unit_number
@@ -385,7 +509,11 @@ local function read_probes()
             for _, v in pairs(st.output_counts) do
               o = o + v
             end
-            pr.electric = { produced_j = i, consumed_j = o }
+            local pw, cw = flow_power(st)
+            pr.electric = {
+              produced_j = i, consumed_j = o,
+              produced_w = pw, consumed_w = cw,
+            }
           end
         end
       end
@@ -397,7 +525,16 @@ local function read_probes()
         end)
         if cok and net and net.signals then
           for _, s in pairs(net.signals) do
-            sig[s.signal.name] = (sig[s.signal.name] or 0) + s.count
+            local name = s.signal.name
+            local cur = sig[name]
+            if cur then
+              cur.count = cur.count + s.count
+            else
+              -- s.signal.type is nil for plain item signals; normalize so the
+              -- exporter/dashboard can split virtual (accumulator charge) from
+              -- item/fluid (logistics contents).
+              sig[name] = { type = s.signal.type or "item", count = s.count }
+            end
           end
         end
       end
@@ -462,10 +599,20 @@ local function fast_refresh()
     if force and force.valid then
       local istats = force.get_item_production_statistics(surface)
       local fstats = force.get_fluid_production_statistics(surface)
-      s.items = {
-        produced = filtered_counts(istats.input_counts, allow),
-        consumed = filtered_counts(istats.output_counts, allow),
-      }
+      local iprod = filtered_counts(istats.input_counts, allow)
+      local icons = filtered_counts(istats.output_counts, allow)
+      if quality_split_enabled() then
+        local qn = quality_names()
+        s.items = {
+          produced = split_by_quality(istats, iprod, "input", qn),
+          consumed = split_by_quality(istats, icons, "output", qn),
+        }
+      else
+        s.items = {
+          produced = wrap_normal(iprod),
+          consumed = wrap_normal(icons),
+        }
+      end
       s.fluids = {
         produced = filtered_counts(fstats.input_counts, allow),
         consumed = filtered_counts(fstats.output_counts, allow),

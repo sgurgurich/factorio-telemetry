@@ -28,4 +28,15 @@ data:extend({
     default_value = true,
     order = "c",
   },
+  {
+    -- Split item produced/consumed by quality (normal/uncommon/rare/epic/
+    -- legendary). Adds a per-(item x quality) statistics lookup to the fast
+    -- lane; toggle off if a megabase stutters (the dashboard "Group by"
+    -- selector still works, everything just collapses to normal).
+    type = "bool-setting",
+    name = "factorio-telemetry-quality-split",
+    setting_type = "runtime-global",
+    default_value = true,
+    order = "d",
+  },
 })
