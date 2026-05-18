@@ -1,0 +1,38 @@
+name: CI
+
+# Runs on every PR (and pushes to main). No secrets, build/validate only —
+# safe to run on hosted runners for fork PRs. This is the required status
+# check for the branch protection on main.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build the exporter exactly the way production does (the Dockerfile
+      # runs `go mod tidy && go build`), so this validates the Go code and
+      # the image build in one step without a committed go.sum.
+      - name: Build exporter image
+        run: docker build -t ftel-exporter-ci ./exporter
+
+      - name: Validate dashboard + mod JSON
+        run: |
+          python3 -c "import json; json.load(open('deploy/dashboards/factorio-telemetry.json')); print('dashboard JSON OK')"
+          python3 -c "import json; print('info.json version', json.load(open('mod/factorio-telemetry/info.json'))['version'])"
+
+      # No local Lua linter (per CLAUDE.md); this is a syntax-only smoke test.
+      # Lua 5.3's parser is close enough to Factorio's 5.2 to catch typos.
+      - name: Lua syntax check (mod)
+        run: |
+          sudo apt-get update -y >/dev/null && sudo apt-get install -y lua5.3 >/dev/null
+          find mod -name '*.lua' -print -exec luac5.3 -p {} +
