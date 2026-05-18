@@ -34,6 +34,19 @@
         ]
       },
       {
+        "name": "group",
+        "label": "Group by",
+        "type": "custom",
+        "query": "By quality : item\\, quality,Combined : item",
+        "includeAll": false,
+        "multi": false,
+        "current": { "text": "By quality", "value": "item, quality" },
+        "options": [
+          { "text": "By quality", "value": "item, quality", "selected": true },
+          { "text": "Combined", "value": "item", "selected": false }
+        ]
+      },
+      {
         "name": "item",
         "label": "Item",
         "type": "query",
@@ -103,8 +116,8 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
       "fieldConfig": { "defaults": { "unit": "watt", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "sum by (probe) (rate(factorio_probe_electric_produced_joules_total{probe=~\"$probe\"}[2m]))", "legendFormat": "{{probe}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
-        { "expr": "sum by (probe) (rate(factorio_probe_electric_consumed_joules_total{probe=~\"$probe\"}[2m]))", "legendFormat": "{{probe}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+        { "expr": "sum by (probe) (factorio_probe_power_produced_watts{probe=~\"$probe\"})", "legendFormat": "{{probe}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "sum by (probe) (factorio_probe_power_consumed_watts{probe=~\"$probe\"})", "legendFormat": "{{probe}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
     {
@@ -114,7 +127,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
       "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 15 }, "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 20 }, { "color": "green", "value": 50 } ] } } },
-      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\"}", "legendFormat": "{{probe}} / {{signal}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\", type=\"virtual\"}", "legendFormat": "{{probe}} / {{signal}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "table",
@@ -124,9 +137,9 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
       "fieldConfig": { "defaults": { "custom": { "filterable": true, "align": "auto" } }, "overrides": [] },
       "options": { "showHeader": true, "sortBy": [ { "displayName": "Count", "desc": true } ], "footer": { "show": false } },
-      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\"}", "instant": true, "format": "table", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ],
+      "targets": [ { "expr": "factorio_probe_signal{probe=~\"$probe\", type=\"item\"}", "instant": true, "format": "table", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ],
       "transformations": [
-        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "container": true, "endpoint": true, "instance": true, "job": true, "namespace": true, "pod": true, "service": true, "probe": true, "surface": true }, "renameByName": { "signal": "Item", "Value": "Count" } } },
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "container": true, "endpoint": true, "instance": true, "job": true, "namespace": true, "pod": true, "service": true, "probe": true, "surface": true, "type": true }, "renameByName": { "signal": "Item", "Value": "Count" } } },
         { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "Count", "desc": true } ] } }
       ]
     },
@@ -136,7 +149,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"$item\"}[2m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (${group}) (rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"$item\"}[2m])))", "legendFormat": "{{item}} {{quality}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -144,7 +157,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\"$item\"}[2m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (${group}) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\"$item\"}[2m])))", "legendFormat": "{{item}} {{quality}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -154,8 +167,8 @@
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "axisCenteredZero": true, "gradientMode": "scheme" }, "color": { "mode": "continuous-RdYlGr" } } },
       "targets": [
-        { "expr": "topk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0)))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
-        { "expr": "bottomk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0)))", "legendFormat": "{{item}}", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+        { "expr": "topk(10, ${rate_unit} * ((sum by (${group}) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (${group}) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0) - (sum by (${group}) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (${group}) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0)))", "legendFormat": "{{item}} {{quality}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "bottomk(10, ${rate_unit} * ((sum by (${group}) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (${group}) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0) - (sum by (${group}) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (${group}) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0)))", "legendFormat": "{{item}} {{quality}}", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
     {
@@ -175,8 +188,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
       "fieldConfig": { "defaults": { "unit": "watt", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[2m]))", "legendFormat": "{{surface}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
-        { "expr": "sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[2m]))", "legendFormat": "{{surface}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+        { "expr": "sum by (surface) (factorio_electric_power_produced_watts{surface=~\"$surface\"})", "legendFormat": "{{surface}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "sum by (surface) (factorio_electric_power_consumed_watts{surface=~\"$surface\"})", "legendFormat": "{{surface}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
     {
@@ -185,7 +198,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 37 },
       "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
-      "targets": [ { "expr": "clamp_max(sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[2m])) / sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[2m])), 1)", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "clamp_max(sum by (surface) (factorio_electric_power_consumed_watts{surface=~\"$surface\"}) / clamp_min(sum by (surface) (factorio_electric_power_produced_watts{surface=~\"$surface\"}), 1), 1)", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",

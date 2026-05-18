@@ -40,6 +40,87 @@ log-grep verify. A hotfix is one more `deploy-mod.sh` run.
 
 ---
 
+# Dashboard rate window [5m]→[2m] — DEPLOYED 2026-05-17
+
+Dashboard-only (ConfigMap hot-reload, no server restart). The 7
+production/consumption/SPM panels (SPM, Item Prod/Cons, Net Item Production,
+Science Consumed by Pack, Fluid Prod/Cons) dropped `rate(...[5m])` → `[2m]`
+now that Task A's fast lane refreshes counters ~5s — more live, still smooth.
+Power panels are unaffected (already on the 0.4.2 `*_watts` gauges, no rate()).
+This is live in the cluster; the mod/exporter remain on 0.4.1.
+
+# 0.4.4 — item quality split — IMPLEMENTED, NOT DEPLOYED
+
+Splits item produced/consumed by quality (normal/uncommon/rare/epic/
+legendary). Factorio's lifetime counter `LuaFlowStatistics.input_counts`
+is NOT keyed by quality, so `control.lua` fetches per-quality via
+`get_input_count/get_output_count(name, quality)` and emits the uniform
+nested schema `items.produced = { item = { quality = count } }`
+(`wrap_normal()` for the off/non-SpaceAge path so the schema is
+unconditional). FEASIBILITY UNKNOWN, handled defensively: the exact
+quality-arg API shape is unverified — `split_by_quality()` tries positional
+then table-arg forms in pcall and only publishes the split if it
+RECONCILES with the trusted aggregate counter (sum ≈ total, 0.5% tol);
+otherwise it falls back to `{normal=total}` (numbers identical to today)
+and `log()`s a one-time warning. So a wrong API guess CANNOT publish bad
+data — it just behaves like pre-0.4.4. New mod bool-setting
+`factorio-telemetry-quality-split` (default true) is the in-game perf
+kill-switch (mirrors `-logistics`; per-(item×quality) lookups land in the
+stutter-sensitive FAST lane — MUST do the in-game "play a minute, zero
+stutter" check on the megabase before trusting it). Exporter:
+`factorio_item_produced_total` / `_consumed_total` gain a `quality` label.
+Dashboard: new custom var `group` (`By quality`→`item, quality` default /
+`Combined`→`item`); Item Production Rate, Item Consumption Rate, Net Item
+Production repointed to `sum by (${group})` + legend `{{item}} {{quality}}`.
+Scope is items only — fluids, logistic stock, Science-Consumed-by-Pack
+deliberately unchanged. Mod 0.4.4, exporter image 0.4.4. Ships with the
+rest of the gated 0.4.x bundle (PR → deploy-safe auto-applies exporter+
+dashboard, then manual deploy-mod for the mod/server restart). Post-deploy
+verify: in-game log has NO "quality-split ... reporting as normal" warning,
+and the dashboard "Group by" toggle actually breaks out qualities.
+
+# 0.4.3 — probe signal type label — IMPLEMENTED, NOT DEPLOYED
+
+Fix for "probe Accumulator Charge panel is inaccurate and shows logistics
+items too" (one speaker wired to power + accumulator + a roboport reading
+logistics). Root cause: the mod keyed probe circuit signals only by name and
+the exporter emitted `factorio_probe_signal{probe,surface,signal}` with no
+signal class, so the Accumulator panel (no signal filter) plotted every wire
+signal including all logistics items, with no attribute to isolate the
+accumulator's *virtual* charge signal. (The multi-accumulator "sum" is
+inherent circuit-network behaviour, not a code bug — documented for the user.)
+Fix: `control.lua` now stores each probe signal as
+`{ type = s.signal.type or "item", count = ... }` (type nil = plain item);
+exporter `probe` struct gains `probeSignal{Type,Count}`, the `probe_signal`
+desc gains a `type` label, Collect passes `ps.Type`. Dashboard: Accumulator
+panel query → `factorio_probe_signal{probe=~"$probe", type="virtual"}`, Wired
+Signals table → `type="item"` (and the `type` column excluded in the organize
+transform). Mod 0.4.3, exporter image 0.4.3. Deploy = same bundle as the
+other pending 0.4.x work: `deploy-mod.sh` (restart) + exporter rebuild +
+dashboard CM. Verify in-game: with a speaker wired to an accumulator + a
+roboport, the Accumulator panel shows only the charge signal and Wired
+Signals shows only logistics items.
+
+# 0.4.2 — power via get_flow_count — IMPLEMENTED, NOT DEPLOYED
+
+Fix for "probe power graphs don't match in-game / wrong shape". Root cause:
+`rate()` of the cumulative `electric_network_statistics` joules counter aliases
+badly (mod updates ~5s, exporter cache ~3s, Prometheus scrape 15s beat against
+each other → sawtooth). Counter itself is fine/monotonic. Fix: the mod now
+also reports instantaneous power via Factorio's own smoothed
+`LuaFlowStatistics.get_flow_count{precision_index=one_minute}` (per-tick for
+electric → *60 = W) — the same data the in-game electric graph shows. New
+JSON fields `electric.produced_w/consumed_w` (per-surface, slow lane) and
+`probes[].electric.produced_w/consumed_w`. Exporter exposes GAUGES
+`factorio_electric_power_produced_watts{surface}` / `_consumed_watts` and
+`factorio_probe_power_produced_watts{probe,surface}` / `_consumed_watts`
+(cumulative joules counters kept too). Dashboard power + satisfaction panels
+repointed to the gauges (no rate()). Mod 0.4.2, exporter image 0.4.2.
+Item/fluid production still uses rate() (left as a possible follow-up).
+Deploy = `deploy-mod.sh` (restart) + exporter rebuild + dashboard CM. Verify
+in-game: probe/surface power should match the in-game electric-network number
+and be smooth.
+
 # Task A — fast/slow snapshot split — IMPLEMENTED in 0.3.1, NOT YET DEPLOYED
 
 Status: `mod/factorio-telemetry/control.lua` was rewritten to the two-lane

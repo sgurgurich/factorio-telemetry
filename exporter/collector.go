@@ -16,6 +16,8 @@ import (
 type electric struct {
 	ProducedJ            float64 `json:"produced_j"`
 	ConsumedJ            float64 `json:"consumed_j"`
+	ProducedW            float64 `json:"produced_w"`
+	ConsumedW            float64 `json:"consumed_w"`
 	Networks             float64 `json:"networks"`
 	AccumulatorChargeJ   float64 `json:"accumulator_charge_j"`
 	AccumulatorCapacityJ float64 `json:"accumulator_capacity_j"`
@@ -40,8 +42,11 @@ type surface struct {
 	Logistics            *logistics         `json:"logistics"`
 	Alerts               map[string]float64 `json:"alerts"`
 	Items                struct {
-		Produced map[string]float64 `json:"produced"`
-		Consumed map[string]float64 `json:"consumed"`
+		// item -> quality -> cumulative count. When the mod's quality-split
+		// setting is off (or the per-quality API doesn't reconcile) every
+		// item collapses to a single "normal" entry.
+		Produced map[string]map[string]float64 `json:"produced"`
+		Consumed map[string]map[string]float64 `json:"consumed"`
 	} `json:"items"`
 	Fluids struct {
 		Produced map[string]float64 `json:"produced"`
@@ -55,8 +60,18 @@ type probe struct {
 	Electric *struct {
 		ProducedJ float64 `json:"produced_j"`
 		ConsumedJ float64 `json:"consumed_j"`
+		ProducedW float64 `json:"produced_w"`
+		ConsumedW float64 `json:"consumed_w"`
 	} `json:"electric"`
-	Signals map[string]float64 `json:"signals"`
+	Signals map[string]probeSignal `json:"signals"`
+}
+
+// One circuit-network signal on a probe speaker's wires. Type is the Factorio
+// signal class ("item", "fluid", "virtual"), used to split the accumulator
+// charge (virtual) from logistics contents (item/fluid) in the dashboard.
+type probeSignal struct {
+	Type  string  `json:"type"`
+	Count float64 `json:"count"`
 }
 
 type eventEntry struct {
@@ -137,11 +152,13 @@ func NewCollector(r *RCON, cacheTTL time.Duration) *Collector {
 			"rockets":            d("factorio_rockets_launched_total", "Rockets launched from the surface", "surface"),
 			"e_produced":         d("factorio_electric_energy_produced_joules_total", "Cumulative energy produced on the surface", "surface"),
 			"e_consumed":         d("factorio_electric_energy_consumed_joules_total", "Cumulative energy consumed on the surface", "surface"),
+			"e_pw":               d("factorio_electric_power_produced_watts", "Instantaneous power produced on the surface (Factorio 1m flow)", "surface"),
+			"e_cw":               d("factorio_electric_power_consumed_watts", "Instantaneous power consumed on the surface (Factorio 1m flow)", "surface"),
 			"e_networks":         d("factorio_electric_networks", "Distinct electric networks on the surface", "surface"),
 			"acc_charge":         d("factorio_accumulator_charge_joules", "Accumulator stored energy on the surface", "surface"),
 			"acc_capacity":       d("factorio_accumulator_capacity_joules", "Accumulator total capacity on the surface", "surface"),
-			"item_produced":      d("factorio_item_produced_total", "Cumulative items produced", "surface", "item"),
-			"item_consumed":      d("factorio_item_consumed_total", "Cumulative items consumed", "surface", "item"),
+			"item_produced":      d("factorio_item_produced_total", "Cumulative items produced", "surface", "item", "quality"),
+			"item_consumed":      d("factorio_item_consumed_total", "Cumulative items consumed", "surface", "item", "quality"),
 			"fluid_produced":     d("factorio_fluid_produced_total", "Cumulative fluid produced", "surface", "fluid"),
 			"fluid_consumed":     d("factorio_fluid_consumed_total", "Cumulative fluid consumed", "surface", "fluid"),
 			"logi_networks":      d("factorio_logistic_networks", "Logistic networks on the surface", "surface"),
@@ -155,7 +172,9 @@ func NewCollector(r *RCON, cacheTTL time.Duration) *Collector {
 			"probe_info":         d("factorio_probe_info", "1 for each registered telemetry probe speaker", "probe", "surface"),
 			"probe_e_produced":   d("factorio_probe_electric_produced_joules_total", "Cumulative energy produced on a probe speaker's electric network", "probe", "surface"),
 			"probe_e_consumed":   d("factorio_probe_electric_consumed_joules_total", "Cumulative energy consumed on a probe speaker's electric network", "probe", "surface"),
-			"probe_signal":       d("factorio_probe_signal", "Circuit-network signal wired into a probe speaker", "probe", "surface", "signal"),
+			"probe_pw":           d("factorio_probe_power_produced_watts", "Instantaneous power produced on a probe's electric network (Factorio 1m flow)", "probe", "surface"),
+			"probe_cw":           d("factorio_probe_power_consumed_watts", "Instantaneous power consumed on a probe's electric network (Factorio 1m flow)", "probe", "surface"),
+			"probe_signal":       d("factorio_probe_signal", "Circuit-network signal wired into a probe speaker", "probe", "surface", "signal", "type"),
 		},
 	}
 }
@@ -236,15 +255,21 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		if sf.Electric != nil {
 			ct("e_produced", sf.Electric.ProducedJ, name)
 			ct("e_consumed", sf.Electric.ConsumedJ, name)
+			g("e_pw", sf.Electric.ProducedW, name)
+			g("e_cw", sf.Electric.ConsumedW, name)
 			g("e_networks", sf.Electric.Networks, name)
 			g("acc_charge", sf.Electric.AccumulatorChargeJ, name)
 			g("acc_capacity", sf.Electric.AccumulatorCapacityJ, name)
 		}
-		for item, v := range sf.Items.Produced {
-			ct("item_produced", v, name, item)
+		for item, byq := range sf.Items.Produced {
+			for q, v := range byq {
+				ct("item_produced", v, name, item, q)
+			}
 		}
-		for item, v := range sf.Items.Consumed {
-			ct("item_consumed", v, name, item)
+		for item, byq := range sf.Items.Consumed {
+			for q, v := range byq {
+				ct("item_consumed", v, name, item, q)
+			}
 		}
 		for fl, v := range sf.Fluids.Produced {
 			ct("fluid_produced", v, name, fl)
@@ -272,9 +297,11 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		if pr.Electric != nil {
 			ct("probe_e_produced", pr.Electric.ProducedJ, label, pr.Surface)
 			ct("probe_e_consumed", pr.Electric.ConsumedJ, label, pr.Surface)
+			g("probe_pw", pr.Electric.ProducedW, label, pr.Surface)
+			g("probe_cw", pr.Electric.ConsumedW, label, pr.Surface)
 		}
-		for sig, v := range pr.Signals {
-			g("probe_signal", v, label, pr.Surface, sig)
+		for sig, ps := range pr.Signals {
+			g("probe_signal", ps.Count, label, pr.Surface, sig, ps.Type)
 		}
 	}
 }

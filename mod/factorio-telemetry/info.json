@@ -1,6 +1,6 @@
 {
   "name": "factorio-telemetry",
-  "version": "0.4.1",
+  "version": "0.4.4",
   "title": "Factorio Telemetry",
   "author": "sgurgurich",
   "description": "Exposes production/consumption, power, logistics, alerts, and game-event telemetry as a JSON snapshot over a remote interface, for scraping into Prometheus/Grafana via RCON.",
