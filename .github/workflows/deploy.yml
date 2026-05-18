@@ -1,0 +1,89 @@
+name: Deploy
+
+# SECURITY: this workflow runs on a SELF-HOSTED runner on the Mac Mini, so it
+# must never execute untrusted code. It deliberately has NO `pull_request`
+# trigger — it only runs on:
+#   * push to main  -> a merged PR (branch protection: only the admin merges)
+#   * workflow_dispatch -> only a repo admin can trigger
+# Fork PRs therefore never reach the runner. The repository guard below is
+# defense-in-depth.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY-MOD to ALSO publish the mod to the portal and RESTART the game server (disconnects players ~1-2 min). Leave blank for a safe exporter + dashboard-only deploy."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Never run two homelab deploys at once; never cancel one mid-restart.
+concurrency:
+  group: homelab-deploy
+  cancel-in-progress: false
+
+jobs:
+  # Safe lane: exporter image + Grafana dashboard. No game-server restart.
+  # Runs automatically on every push to main, and on any manual dispatch.
+  deploy-safe:
+    name: deploy-safe (exporter + dashboard, no restart)
+    if: github.repository == 'sgurgurich/factorio-telemetry'
+    runs-on: [self-hosted, macmini]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build + import exporter, apply manifests, refresh dashboard
+        run: |
+          set -euo pipefail
+          export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin"
+          # Empty docker config dir: avoids the macOS osxkeychain credential
+          # helper hanging on this headless runner.
+          export DOCKER_CONFIG="$(mktemp -d)"
+
+          VER=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' mod/factorio-telemetry/info.json | sed 's/.*"\([^"]*\)"$/\1/')
+          IMAGE="factorio-telemetry-exporter:${VER}"
+
+          echo ">> docker build $IMAGE"
+          docker build -t "$IMAGE" ./exporter
+
+          echo ">> k3d image import (cluster: homelab)"
+          k3d image import "$IMAGE" -c homelab
+
+          echo ">> apply exporter.yaml"
+          kubectl apply -f deploy/exporter.yaml
+
+          echo ">> dashboard ConfigMap (Grafana hot-reload, no restart)"
+          kubectl -n factorio create configmap factorio-telemetry-dashboard \
+            --from-file=factorio-telemetry.json=deploy/dashboards/factorio-telemetry.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n factorio label configmap factorio-telemetry-dashboard \
+            grafana_dashboard=1 --overwrite
+
+          echo ">> wait for exporter rollout"
+          kubectl -n factorio rollout status deploy/factorio-telemetry-exporter --timeout=120s
+
+  # Disruptive lane: publishes the mod to mods.factorio.com AND restarts the
+  # Factorio StatefulSet (kicks players). MANUAL ONLY, and only when the
+  # dispatcher explicitly types DEPLOY-MOD. Runs after deploy-safe so the new
+  # exporter/dashboard understand the new snapshot before the mod emits it.
+  deploy-mod:
+    name: deploy-mod (publishes portal + RESTARTS game server)
+    needs: deploy-safe
+    if: >-
+      github.repository == 'sgurgurich/factorio-telemetry' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.confirm == 'DEPLOY-MOD'
+    runs-on: [self-hosted, macmini]
+    # Add required reviewers / a wait timer to this environment in
+    # Settings > Environments > production for an extra human gate.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: deploy-mod.sh (publish -> save -> stage -> restart -> verify)
+        run: |
+          set -euo pipefail
+          export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin"
+          bash deploy/deploy-mod.sh
