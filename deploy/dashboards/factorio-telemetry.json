@@ -93,7 +93,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "purple" } } },
-      "targets": [ { "expr": "sum(rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"science\"}[5m])) * 60", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "sum(rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"science\"}[2m])) * 60", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -136,7 +136,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"$item\"}[5m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item=~\"$item\"}[2m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -144,7 +144,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\"$item\"}[5m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "topk(25, ${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\"$item\"}[2m])))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -154,8 +154,8 @@
       "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "axisCenteredZero": true, "gradientMode": "scheme" }, "color": { "mode": "continuous-RdYlGr" } } },
       "targets": [
-        { "expr": "topk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) * 0)))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
-        { "expr": "bottomk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[5m])) * 0)))", "legendFormat": "{{item}}", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+        { "expr": "topk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0)))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "bottomk(10, ${rate_unit} * ((sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0) - (sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) or sum by (item) (rate(factorio_item_produced_total{surface=~\"$surface\", item!=\"science\", item=~\"$item\"}[2m])) * 0)))", "legendFormat": "{{item}}", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
     {
@@ -165,7 +165,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
-      "targets": [ { "expr": "${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\".*science-pack\"}[5m]))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "${rate_unit} * sum by (item) (rate(factorio_item_consumed_total{surface=~\"$surface\", item=~\".*science-pack\"}[2m]))", "legendFormat": "{{item}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -175,8 +175,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
       "fieldConfig": { "defaults": { "unit": "watt", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[5m]))", "legendFormat": "{{surface}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
-        { "expr": "sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[5m]))", "legendFormat": "{{surface}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
+        { "expr": "sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[2m]))", "legendFormat": "{{surface}} produced", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } },
+        { "expr": "sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[2m]))", "legendFormat": "{{surface}} consumed", "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" } }
       ]
     },
     {
@@ -185,7 +185,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 37 },
       "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
-      "targets": [ { "expr": "clamp_max(sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[5m])) / sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[5m])), 1)", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "clamp_max(sum by (surface) (rate(factorio_electric_energy_consumed_joules_total{surface=~\"$surface\"}[2m])) / sum by (surface) (rate(factorio_electric_energy_produced_joules_total{surface=~\"$surface\"}[2m])), 1)", "legendFormat": "{{surface}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -209,7 +209,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 53 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "topk(10, ${rate_unit} * sum by (fluid) (rate(factorio_fluid_produced_total{surface=~\"$surface\"}[5m])))", "legendFormat": "{{fluid}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "topk(10, ${rate_unit} * sum by (fluid) (rate(factorio_fluid_produced_total{surface=~\"$surface\"}[2m])))", "legendFormat": "{{fluid}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
@@ -217,7 +217,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 53 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
-      "targets": [ { "expr": "topk(10, ${rate_unit} * sum by (fluid) (rate(factorio_fluid_consumed_total{surface=~\"$surface\"}[5m])))", "legendFormat": "{{fluid}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
+      "targets": [ { "expr": "topk(10, ${rate_unit} * sum by (fluid) (rate(factorio_fluid_consumed_total{surface=~\"$surface\"}[2m])))", "legendFormat": "{{fluid}}", "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" } } ]
     },
     {
       "type": "timeseries",
