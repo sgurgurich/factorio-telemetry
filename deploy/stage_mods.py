@@ -21,8 +21,10 @@ DOWNLOADS = [
      "be7ce1b5c9477ad3161df120a379aec091b86f77"),
     ("/download/RateCalculator/696d65295c86e177a42ba14c", "RateCalculator_3.3.8.zip",
      "9fb4592b2f05b3dc3110e51fc04df4ce053a39e3"),
+    ("/download/RocketCargoInsertion/69ddc493e984fe92edcd0963", "RocketCargoInsertion_1.1.1.zip",
+     "30a743bc37714fcc1a1b9565bd36c2fac4078034"),
 ]
-ENABLE = ["factorio-telemetry", "flib", "RateCalculator"]
+ENABLE = ["factorio-telemetry", "flib", "RateCalculator", "RocketCargoInsertion"]
 REMOVE_PREFIX = "MaxRateCalculator"
 
 
